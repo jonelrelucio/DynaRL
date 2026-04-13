@@ -1,1 +1,3 @@
-"gymnasium[box2d]"
+gymnasium[box2d]
+numpy
+pyyaml

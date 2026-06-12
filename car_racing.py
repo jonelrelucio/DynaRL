@@ -1,3 +1,5 @@
+import argparse
+import csv
 import gymnasium as gym
 import numpy as np
 import random as rnd
@@ -515,7 +517,10 @@ def build_env(cfg: dict):
     mode = cfg["environment"].get("mode", "discrete")
     env_name = cfg["environment"]["name"]
     render = cfg["environment"].get("render_mode", "rgb_array")
-    base_kw = dict(lap_complete_percent=0.95, domain_randomize=False)
+    base_kw = dict(
+        lap_complete_percent=cfg["environment"].get("lap_complete_percent", 0.95),
+        domain_randomize=cfg["environment"].get("domain_randomize", False),
+    )
 
     if mode == "dqn":
         mode_cfg = cfg["dqn"]
@@ -552,8 +557,26 @@ def _stats_suffix(agent) -> str:
     return f"states {len(agent.q)}"
 
 
+def _open_csv_logger(save_path: str | None):
+    """Open a CSV file for per-episode logging next to the checkpoint."""
+    if not save_path:
+        return None, None
+    csv_path = save_path + "_log.csv"
+    existed = os.path.exists(csv_path)
+    f = open(csv_path, "a", newline="")
+    writer = csv.writer(f)
+    if not existed:
+        writer.writerow(["episode", "reward", "epsilon", "avg_td_error"])
+    return f, writer
+
+
 def main():
-    with open("config.yaml", "r") as f:
+    parser = argparse.ArgumentParser(description="Train a RL agent on CarRacing.")
+    parser.add_argument("--config", default="config.yaml",
+                        help="Path to the YAML config file (default: config.yaml)")
+    args = parser.parse_args()
+
+    with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
     # Seed built-in, numpy, and torch RNGs for reproducibility.
@@ -573,6 +596,9 @@ def main():
 
     n_episodes = cfg["environment"]["n_episodes"]
     log_every = cfg["environment"].get("log_interval", 25)
+    checkpoint_every = cfg["environment"].get("checkpoint_interval", 0)
+
+    csv_file, csv_writer = _open_csv_logger(save_path)
 
     print(f"{'─'*62}")
     print(f"  Mode      : {mode_label}")
@@ -583,6 +609,8 @@ def main():
     else:
         print(f"  Device    : {agent.device}")
     print(f"  Episodes  : {n_episodes}")
+    if checkpoint_every:
+        print(f"  Checkpoint: every {checkpoint_every} episodes")
     print(f"{'─'*62}")
 
     for ep in range(n_episodes):
@@ -591,6 +619,12 @@ def main():
         if len(agent.episode_rewards) > 5_000:
             del agent.episode_rewards[:2_500]
         agent.decay_epsilon()
+        avg_td = float(np.mean(list(agent.td_errors)[-1000:])) if agent.td_errors else 0.0
+
+        if csv_writer:
+            csv_writer.writerow([ep + 1, f"{reward:.4f}",
+                                  f"{agent.epsilon:.6f}", f"{avg_td:.6f}"])
+            csv_file.flush()
 
         print(
             f"\r  ep {ep+1:4d}/{n_episodes}  "
@@ -602,15 +636,20 @@ def main():
 
         if (ep + 1) % log_every == 0:
             window = agent.episode_rewards[-log_every:]
-            avg_td = np.mean(agent.td_errors[-1000:]) if agent.td_errors else 0.0
             print(
                 f"\n  ├ avg_reward {np.mean(window):8.2f}"
                 f"  TD_err {avg_td:.4f}"
             )
 
+        if checkpoint_every and save_path and (ep + 1) % checkpoint_every == 0:
+            agent.save(f"{save_path}_ep{ep+1}")
+
     print()
     if save_path:
         agent.save(save_path)
+
+    if csv_file:
+        csv_file.close()
 
     env.close()
 

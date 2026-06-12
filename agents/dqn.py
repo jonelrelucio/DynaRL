@@ -197,6 +197,8 @@ class DQNAgent(Agent):
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def save(self, path: str) -> None:
+        if os.path.dirname(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save({
             "online": self.online.state_dict(),
             "target": self.target.state_dict(),
@@ -209,7 +211,7 @@ class DQNAgent(Agent):
     def load(self, path: str) -> None:
         pt = path + ".pt"
         if os.path.exists(pt):
-            data = torch.load(pt, map_location=self.device)
+            data = torch.load(pt, map_location=self.device, weights_only=True)
             self.online.load_state_dict(data["online"])
             self.target.load_state_dict(data["target"])
             self.optimizer.load_state_dict(data["optimizer"])

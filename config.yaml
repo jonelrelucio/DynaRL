@@ -6,7 +6,7 @@ environment:
   mode: "dqn"                # discrete | continuous | dqn
   lap_complete_percent: 0.95
   domain_randomize: false
-  checkpoint_interval: 250   # save a checkpoint every N episodes (0 = disabled)
+  checkpoint_interval: 20   # save a checkpoint every N episodes (0 = disabled)
 
 seed: 42
 
@@ -53,4 +53,5 @@ observation:
   n_bins: 6
   n_regions: 6
 
-save_path: "agent_weights"
+save_path: "checkpoints/agent_weights"
+log_path: "logs/agent_weights_log.csv"

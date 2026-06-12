@@ -1,1 +1,8 @@
 /venv
+/.venv
+__pycache__/
+*.pt
+*.csv
+checkpoints/
+logs/
+.idea/

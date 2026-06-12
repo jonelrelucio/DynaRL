@@ -30,6 +30,8 @@ class CSVLogger(Logger):
     """
 
     def __init__(self, path: str):
+        if os.path.dirname(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         # Check size, not just existence: an empty file still needs a header.
         existing_and_nonempty = os.path.exists(path) and os.path.getsize(path) > 0
         self._f = open(path, "a", newline="")

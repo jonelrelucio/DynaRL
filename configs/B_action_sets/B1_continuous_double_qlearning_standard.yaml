@@ -1,0 +1,27 @@
+environment:
+  name: CarRacing-v3
+  render_mode: rgb_array
+  n_episodes: 5000
+  log_interval: 10
+  mode: continuous
+  lap_complete_percent: 0.95
+  domain_randomize: false
+  checkpoint_interval: 0
+seed: 42
+continuous:
+  algorithm: double_q_learning
+  policy: epsilon_greedy
+  action_set: standard
+  hyperparameters:
+    learning_rate: 0.05
+    discount_factor: 0.95
+    epsilon: 1.0
+    exploration_decay: 0.998
+    final_epsilon: 0.05
+    temperature: 1.5
+observation:
+  method: feature
+  n_bins: 6
+  n_regions: 6
+save_path: checkpoints/B_action_sets/B1_continuous_double_qlearning_standard
+log_path: logs/B_action_sets/B1_continuous_double_qlearning_standard_log.csv

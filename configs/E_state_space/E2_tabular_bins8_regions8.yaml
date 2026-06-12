@@ -1,0 +1,26 @@
+environment:
+  name: CarRacing-v3
+  render_mode: rgb_array
+  n_episodes: 5000
+  log_interval: 10
+  mode: discrete
+  lap_complete_percent: 0.95
+  domain_randomize: false
+  checkpoint_interval: 0
+seed: 42
+discrete:
+  algorithm: double_q_learning
+  policy: epsilon_greedy
+  hyperparameters:
+    learning_rate: 0.05
+    discount_factor: 0.95
+    epsilon: 1.0
+    exploration_decay: 0.998
+    final_epsilon: 0.05
+    temperature: 1.5
+observation:
+  method: feature
+  n_bins: 8
+  n_regions: 8
+save_path: checkpoints/E_state_space/E2_tabular_bins8_regions8
+log_path: logs/E_state_space/E2_tabular_bins8_regions8_log.csv

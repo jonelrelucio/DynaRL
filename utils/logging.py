@@ -51,10 +51,17 @@ class CSVLogger(Logger):
 
 
 class ConsoleLogger(Logger):
-    """Prints a summary line every `interval` episodes."""
+    """Prints a summary line every `interval` episodes.
 
-    def __init__(self, interval: int = 25):
+    Args:
+        interval: Print every N episodes.
+        prefix:   Optional string prepended to each summary line.
+                  Useful when multiple runs print to the same terminal.
+    """
+
+    def __init__(self, interval: int = 25, prefix: str = ""):
         self.interval = interval
+        self.prefix = (prefix + " ") if prefix else ""
         self._rewards: list = []
 
     def log(self, episode: int, reward: float,
@@ -64,9 +71,10 @@ class ConsoleLogger(Logger):
             window = self._rewards[-self.interval:]
             avg = sum(window) / len(window)
             print(
-                f"\n  ├ avg_reward {avg:8.2f}"
+                f"\n  {self.prefix}├ avg_reward {avg:8.2f}"
                 f"  TD_err {avg_td_error:.4f}"
             )
+
 
 
 class CompositeLogger(Logger):

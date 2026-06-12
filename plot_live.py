@@ -21,13 +21,14 @@ import glob
 import os
 import sys
 
+import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.animation import FuncAnimation
 
 # ── Colour palette ────────────────────────────────────────────────────────────
 # tab10 gives 10 distinct colours; we cycle for larger groups.
-_CMAP = plt.cm.get_cmap("tab10")
+_CMAP = matplotlib.colormaps["tab10"]
 
 
 def _color(i: int):

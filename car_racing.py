@@ -90,6 +90,12 @@ def extract_features(obs: np.ndarray, n_bins: int = 4, n_regions: int = 4) -> tu
 
 
 def to_tuple(a):
+    """Recursively convert a nested array/iterable into a nested tuple.
+
+    Used by the 'raw' observation method to make numpy arrays hashable
+    for tabular Q-tables. Note: the raw method is impractical at scale
+    (state space explodes); prefer the default 'feature' method.
+    """
     try:
         return tuple(to_tuple(i) for i in a)
     except TypeError:
@@ -148,15 +154,24 @@ class ReplayBuffer:
         batch = rnd.sample(self.buf, batch_size)
         obs, acts, rews, next_obs, dones = zip(*batch)
 
+        # Pre-allocate contiguous arrays instead of letting np.array copy
+        # each element individually — meaningfully faster for large batches.
+        C, H, W = obs[0].shape
+        obs_arr = np.empty((batch_size, C, H, W), dtype=np.uint8)
+        nxt_arr = np.empty((batch_size, C, H, W), dtype=np.uint8)
+        for i in range(batch_size):
+            obs_arr[i] = obs[i]
+            nxt_arr[i] = next_obs[i]
+
         def t(x, dtype):
-            return torch.tensor(np.array(x), dtype=dtype, device=device)
+            return torch.tensor(x, dtype=dtype, device=device)
 
         return (
-            t(obs, torch.float32),
-            t(acts, torch.long),
-            t(rews, torch.float32),
-            t(next_obs, torch.float32),
-            t(dones, torch.float32),
+            t(obs_arr, torch.float32),
+            t(np.array(acts, dtype=np.int64), torch.long),
+            t(np.array(rews, dtype=np.float32), torch.float32),
+            t(nxt_arr, torch.float32),
+            t(np.array(dones, dtype=np.float32), torch.float32),
         )
 
     def __len__(self) -> int:
@@ -208,7 +223,21 @@ class BaseAgent:
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-    def update(self, obs, action, reward, next_obs, next_action=None):
+    def preprocess(self, raw_obs: np.ndarray, obs_cfg: dict):
+        """Convert a raw observation to the form expected by this agent."""
+        return preprocess(raw_obs, obs_cfg)
+
+    def train_step(self, obs, action: int, reward: float,
+                   next_obs, done: bool) -> int | None:
+        """Apply one training update and return the next action (or None).
+
+        Off-policy agents return None; on-policy agents (SARSA) return
+        the next action so it can be reused on the next step.
+        """
+        self.update(obs, action, reward, next_obs, done=done)
+        return None
+
+    def update(self, obs, action, reward, next_obs, next_action=None, done=False):
         raise NotImplementedError
 
     def save(self, path: str):
@@ -290,6 +319,11 @@ class SARSAAgent(BaseAgent):
         self.td_errors.append(abs(td_err))
         return next_action
 
+    def train_step(self, obs, action: int, reward: float,
+                   next_obs, done: bool) -> int:
+        """SARSA is on-policy: returns the next action to reuse on the next step."""
+        return self.update(obs, action, reward, next_obs, done=done)
+
 
 class ExpectedSARSAAgent(BaseAgent):
     def _probs(self, obs):
@@ -344,6 +378,16 @@ class DQNAgent:
         # Use bounded deques to avoid manual trimming
         self.td_errors = deque(maxlen=10_000)
         self.episode_rewards = []
+
+    def preprocess(self, raw_obs: np.ndarray, obs_cfg: dict) -> np.ndarray:
+        """DQN operates on raw pixel observations — no tabular preprocessing."""
+        return raw_obs
+
+    def train_step(self, obs: np.ndarray, action: int, reward: float,
+                   next_obs: np.ndarray, done: bool) -> None:
+        """Push transition to replay buffer and run one gradient update."""
+        self.update(obs, action, reward, next_obs, done)
+        return None
 
     def get_action(self, obs: np.ndarray) -> int:
         if rnd.random() < self.epsilon:
@@ -434,34 +478,33 @@ def make_agent(mode_cfg: dict, env: gym.Env):
 
 
 def run_episode(env, agent, obs_cfg: dict, training: bool = True, seed: int | None = None) -> float:
-    is_dqn = isinstance(agent, DQNAgent)
-    is_sarsa = isinstance(agent, SARSAAgent)
+    """Run one episode, optionally training the agent.
 
+    Uses each agent's preprocess() and train_step() methods so no
+    isinstance checks are needed here — adding a new agent type only
+    requires implementing those two methods.
+    """
     reset_kw = {"seed": seed} if seed is not None else {}
     raw_obs, _ = env.reset(**reset_kw)
 
-    obs = raw_obs if is_dqn else preprocess(raw_obs, obs_cfg)
+    obs = agent.preprocess(raw_obs, obs_cfg)
+    action = agent.get_action(obs)
     done = False
     total_reward = 0.0
-    action = agent.get_action(obs) if is_sarsa else None
 
     while not done:
-        if not is_sarsa:
-            action = agent.get_action(obs)
-
         raw_next, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
-        next_obs = raw_next if is_dqn else preprocess(raw_next, obs_cfg)
+        next_obs = agent.preprocess(raw_next, obs_cfg)
         total_reward += reward
 
         if training:
-            if is_dqn:
-                agent.update(obs, action, reward, next_obs, done)
-            elif is_sarsa:
-                # Pass done so the terminal bootstrap is zeroed correctly
-                action = agent.update(obs, action, reward, next_obs, done=done)
-            else:
-                agent.update(obs, action, reward, next_obs, done=done)
+            next_action = agent.train_step(obs, action, reward, next_obs, done)
+            # On-policy agents (e.g. SARSA) return the next action to reuse;
+            # off-policy agents return None so we query get_action normally.
+            action = next_action if next_action is not None else agent.get_action(next_obs)
+        else:
+            action = agent.get_action(next_obs)
 
         obs = next_obs
 
@@ -512,6 +555,13 @@ def _stats_suffix(agent) -> str:
 def main():
     with open("config.yaml", "r") as f:
         cfg = yaml.safe_load(f)
+
+    # Seed built-in, numpy, and torch RNGs for reproducibility.
+    seed = cfg.get("seed", 42)
+    rnd.seed(seed)
+    np.random.seed(seed)
+    if TORCH_AVAILABLE:
+        torch.manual_seed(seed)
 
     env, mode_cfg, mode_label = build_env(cfg)
     agent = make_agent(mode_cfg, env)

@@ -25,14 +25,16 @@ class Logger(ABC):
 class CSVLogger(Logger):
     """Appends one row per episode to a CSV file.
 
-    Resumes an existing file gracefully (no duplicate header).
+    Resumes an existing non-empty file gracefully (no duplicate header).
+    An empty file (e.g. freshly created) always gets a header written.
     """
 
     def __init__(self, path: str):
-        existed = os.path.exists(path)
+        # Check size, not just existence: an empty file still needs a header.
+        existing_and_nonempty = os.path.exists(path) and os.path.getsize(path) > 0
         self._f = open(path, "a", newline="")
         self._writer = csv.writer(self._f)
-        if not existed:
+        if not existing_and_nonempty:
             self._writer.writerow(["episode", "reward", "epsilon", "avg_td_error"])
 
     def log(self, episode: int, reward: float,

@@ -72,7 +72,9 @@ class SARSAAgent(BaseAgent):
         self.q[obs][action] += self.lr * td_err
         self.counts[obs][action] += 1
         self.td_errors.append(abs(td_err))
-        return next_action
+        # Cast to plain int: np.argmax returns np.int64 which fails
+        # isinstance(result, int) checks in run_episode.
+        return int(next_action)
 
     def train_step(self, obs, action: int, reward: float,
                    next_obs, done: bool) -> int:

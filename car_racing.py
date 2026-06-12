@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 import gymnasium as gym
 import numpy as np
@@ -18,7 +18,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 
-# ─── Action sets for continuous mode ─────────────────────────────────────────
+# --- Action sets for continuous mode -----------------------------------------
 
 ACTION_SETS = {
     "standard": [
@@ -73,7 +73,7 @@ class DiscretizedEnv(gym.Wrapper):
         return self.env.step(self._actions[action])
 
 
-# ─── Observation preprocessing (tabular agents only) ─────────────────────────
+# --- Observation preprocessing (tabular agents only) -------------------------
 
 def extract_features(obs: np.ndarray, n_bins: int = 4, n_regions: int = 4) -> tuple:
     r, g, b = obs[:, :, 0], obs[:, :, 1], obs[:, :, 2]
@@ -110,7 +110,7 @@ def preprocess(raw_obs: np.ndarray, obs_cfg: dict) -> tuple:
     return to_tuple(raw_obs)
 
 
-# ─── Neural network components (DQN) ─────────────────────────────────────────
+# --- Neural network components (DQN) -----------------------------------------
 
 class CNN(nn.Module):
     """
@@ -181,7 +181,7 @@ class ReplayBuffer:
 
 
 
-# ─── Tabular base agent ───────────────────────────────────────────────────────
+# --- Tabular base agent -------------------------------------------------------
 
 class BaseAgent:
     def __init__(self, hp: dict, policy: str, env: gym.Env):
@@ -345,7 +345,7 @@ class ExpectedSARSAAgent(BaseAgent):
         self.td_errors.append(abs(td_err))
 
 
-# ─── DQN agent ────────────────────────────────────────────────────────────────
+# --- DQN agent ----------------------------------------------------------------
 
 class DQNAgent:
     def __init__(self, hp: dict, policy: str, env: gym.Env, double: bool = False):
@@ -600,7 +600,7 @@ def main():
 
     csv_file, csv_writer = _open_csv_logger(save_path)
 
-    print(f"{'─'*62}")
+    print(f"{'-'*62}")
     print(f"  Mode      : {mode_label}")
     print(f"  Algorithm : {mode_cfg.get('algorithm', 'q_learning')}")
     print(f"  Policy    : {mode_cfg.get('policy', 'epsilon_greedy')}")
@@ -611,7 +611,7 @@ def main():
     print(f"  Episodes  : {n_episodes}")
     if checkpoint_every:
         print(f"  Checkpoint: every {checkpoint_every} episodes")
-    print(f"{'─'*62}")
+    print(f"{'-'*62}")
 
     for ep in range(n_episodes):
         reward = run_episode(env, agent, obs_cfg, training=True, seed=ep)

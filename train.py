@@ -235,14 +235,14 @@ def main() -> None:
             sys.exit("No matching configs found. Nothing to run.")
 
         n_workers = args.workers or len(configs)
-        print(f"{'─'*62}")
+        print(f"{'-'*62}")
         print(f"  Group mode  : {', '.join(args.group)}")
         print(f"  Configs     : {len(configs)}")
         print(f"  Workers     : {n_workers}")
-        print(f"{'─'*62}")
+        print(f"{'-'*62}")
         for p in configs:
-            print(f"  • {p}")
-        print(f"{'─'*62}\n")
+            print(f"  * {p}")
+        print(f"{'-'*62}\n")
 
         worker_args = [(p, args.human, args.resume) for p in configs]
 
@@ -251,9 +251,9 @@ def main() -> None:
         with ctx.Pool(processes=n_workers) as pool:
             pool.map(_worker, worker_args)
 
-        print(f"\n{'─'*62}")
+        print(f"\n{'-'*62}")
         print(f"  All {len(configs)} runs finished.")
-        print(f"{'─'*62}")
+        print(f"{'-'*62}")
         return
 
     # ── Single-config mode (original behaviour) ───────────────────────────────

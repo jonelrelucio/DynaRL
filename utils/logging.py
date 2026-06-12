@@ -71,7 +71,7 @@ class ConsoleLogger(Logger):
             window = self._rewards[-self.interval:]
             avg = sum(window) / len(window)
             print(
-                f"\n  {self.prefix}├ avg_reward {avg:8.2f}"
+                f"\n  {self.prefix}| avg_reward {avg:8.2f}"
                 f"  TD_err {avg_td_error:.4f}"
             )
 

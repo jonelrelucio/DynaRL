@@ -37,6 +37,17 @@ ACTION_SETS = {
         [-1.0,  0.5,  0.0],
         [ 1.0,  0.5,  0.0],
     ],
+    # Replicates Gymnasium CarRacing-v3 Discrete(5) actions via continuous mode.
+    # This bypasses a Gymnasium 1.0 bug where discrete mode applies .astype(float64)
+    # then fails Discrete(5).contains() check.
+    # Actions: [do nothing, left, right, gas, brake]
+    "car_racing_discrete": [
+        [ 0.0,  0.0,  0.0],   # 0: do nothing
+        [-0.6,  0.0,  0.0],   # 1: steer left
+        [ 0.6,  0.0,  0.0],   # 2: steer right
+        [ 0.0,  0.2,  0.0],   # 3: gas
+        [ 0.0,  0.0,  0.8],   # 4: brake
+    ],
 }
 
 
@@ -56,6 +67,16 @@ class DiscretizedEnv(gym.Wrapper):
 
     def step(self, action: int):
         return self.env.step(self._actions[action])
+
+class DiscreteInt64Wrapper(gym.Wrapper):
+    """Gymnasium 1.0 CarRacing-v3 calls action.astype() unconditionally.
+
+    Python `int` (returned by argmax/sample casts) doesn't have .astype(),
+    but np.int64 does. This wrapper ensures discrete actions are np.int64.
+    """
+
+    def step(self, action):
+        return self.env.step(np.int64(action))
 
 
 class CarRacingPreprocessor(gym.Wrapper):
@@ -160,7 +181,10 @@ def build_env(cfg: dict):
 
     else:
         mode_cfg = cfg["discrete"]
-        env      = gym.make(env_name, render_mode=render, continuous=False, **base_kw)
+        # Use continuous=True + DiscretizedEnv to work around a Gymnasium 1.0 bug
+        # where discrete mode calls action.astype(float64) then fails contains() check.
+        raw_env  = gym.make(env_name, render_mode=render, continuous=True, **base_kw)
+        env      = DiscretizedEnv(raw_env, "car_racing_discrete")
         label    = "tabular / discrete -> 5 actions"
 
     return env, mode_cfg, label

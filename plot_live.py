@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.animation import FuncAnimation
 
-# ── Colour palette ────────────────────────────────────────────────────────────
+# -- Colour palette ------------------------------------------------------------
 # tab10 gives 10 distinct colours; we cycle for larger groups.
 _CMAP = matplotlib.colormaps["tab10"]
 
@@ -43,7 +43,7 @@ def _label(csv_path: str) -> str:
     return base
 
 
-# ── Log discovery ─────────────────────────────────────────────────────────────
+# -- Log discovery -------------------------------------------------------------
 
 def _resolve_group_csvs(groups: list[str], logs_dir: str = "logs") -> dict[str, list[str]]:
     """Return ``{group_label: [csv_paths]}`` for the requested groups.
@@ -93,7 +93,7 @@ def _resolve_group_csvs(groups: list[str], logs_dir: str = "logs") -> dict[str, 
     return result
 
 
-# ── Figure builder ────────────────────────────────────────────────────────────
+# -- Figure builder ------------------------------------------------------------
 
 def _build_figure(group_label: str, csv_paths: list[str]) -> tuple:
     """Create a matplotlib figure for *group_label* watching *csv_paths*.
@@ -125,7 +125,7 @@ def _build_figure(group_label: str, csv_paths: list[str]) -> tuple:
             color = _color(i)
             name  = _label(csv_path)
 
-            # ── Reward ───────────────────────────────────────────────────────
+            # -- Reward -------------------------------------------------------
             ax1.plot(df["episode"], df["reward"],
                      alpha=0.2, color=color, linewidth=1)
             window = min(50, len(df))
@@ -134,11 +134,11 @@ def _build_figure(group_label: str, csv_paths: list[str]) -> tuple:
                 ax1.plot(df["episode"], smoothed,
                          color=color, linewidth=2, label=name)
 
-            # ── TD Error ─────────────────────────────────────────────────────
+            # -- TD Error -----------------------------------------------------
             ax2.plot(df["episode"], df["avg_td_error"],
                      color=color, linewidth=1.5, alpha=0.85, label=name)
 
-        # ── Axes decoration ───────────────────────────────────────────────────
+        # -- Axes decoration ---------------------------------------------------
         ax1.set_title("Reward  (faint = raw,  solid = 50-ep moving avg)",
                       fontsize=11)
         ax1.set_ylabel("Total Reward")
@@ -162,7 +162,7 @@ def _build_figure(group_label: str, csv_paths: list[str]) -> tuple:
     return fig, update
 
 
-# ── Single-CSV mode (original behaviour) ─────────────────────────────────────
+# -- Single-CSV mode (original behaviour) -------------------------------------
 
 def _build_single_figure(csv_path: str) -> tuple:
     """Original single-CSV live plot."""
@@ -209,7 +209,7 @@ def _build_single_figure(csv_path: str) -> tuple:
     return fig, update
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# -- CLI -----------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -242,17 +242,17 @@ def main() -> None:
     animations: list[FuncAnimation] = []   # keep refs to avoid GC
 
     if args.group:
-        # ── Group mode ────────────────────────────────────────────────────────
+        # -- Group mode --------------------------------------------------------
         group_map = _resolve_group_csvs(args.group, logs_dir=args.logs_dir)
 
-        print(f"{'─'*60}")
-        print(f"  Live plot — {len(group_map)} window(s)")
+        print(f"{'-'*60}")
+        print(f"  Live plot - {len(group_map)} window(s)")
         for label, csvs in group_map.items():
             print(f"  [{label}]  {len(csvs)} CSV(s):")
             for c in csvs:
-                status = "exists" if os.path.exists(c) else "waiting…"
+                status = "exists" if os.path.exists(c) else "waiting..."
                 print(f"      {c}  ({status})")
-        print(f"{'─'*60}\n")
+        print(f"{'-'*60}\n")
 
         for group_label, csv_paths in group_map.items():
             fig, update_fn = _build_figure(group_label, csv_paths)
@@ -261,10 +261,10 @@ def main() -> None:
             animations.append(ani)
 
     else:
-        # ── Single-CSV mode (original behaviour) ──────────────────────────────
+        # -- Single-CSV mode (original behaviour) ------------------------------
         csv_path = args.csv or "logs/agent_weights_log.csv"
         if not os.path.exists(csv_path):
-            print(f"Waiting for {csv_path} to be created…")
+            print(f"Waiting for {csv_path} to be created...")
         else:
             print(f"Starting live plot for {csv_path}")
 

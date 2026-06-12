@@ -114,7 +114,7 @@ class Trainer:
             print(
                 f"\r  ep {ep+1:4d}/{self.n_episodes}  "
                 f"reward {reward:8.2f}  "
-                f"ε {self.agent.epsilon:.4f}  "
+                f"eps {self.agent.epsilon:.4f}  "
                 f"{_stats_suffix(self.agent)}",
                 end="", flush=True,
             )
@@ -133,7 +133,7 @@ class Trainer:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _print_header(self) -> None:
-        print(f"{'─'*62}")
+        print(f"{'-'*62}")
         print(f"  Mode      : {self.mode_label}")
         print(f"  Algorithm : {self._algorithm}")
         print(f"  Policy    : {self._policy}")
@@ -144,4 +144,4 @@ class Trainer:
         print(f"  Episodes  : {self.n_episodes}")
         if self.checkpoint_every:
             print(f"  Checkpoint: every {self.checkpoint_every} episodes")
-        print(f"{'─'*62}")
+        print(f"{'-'*62}")

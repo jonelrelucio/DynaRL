@@ -26,15 +26,9 @@ import numpy as np
 import yaml
 
 from agents import make_agent
-from agents.dqn import TORCH_AVAILABLE
 from envs import build_env
 from trainer import Trainer
 from utils.logging import CSVLogger, ConsoleLogger, CompositeLogger
-
-try:
-    import torch
-except ImportError:
-    pass
 
 
 # ── Single-config training ────────────────────────────────────────────────────
@@ -58,8 +52,13 @@ def _train_one(config_path: str, human: bool = False, resume: str | None = None)
     seed = cfg.get("seed", 42)
     rnd.seed(seed)
     np.random.seed(seed)
-    if TORCH_AVAILABLE:
-        torch.manual_seed(seed)
+    try:
+        from agents.dqn import TORCH_AVAILABLE
+        if TORCH_AVAILABLE:
+            import torch
+            torch.manual_seed(seed)
+    except Exception:
+        pass
 
     # ── Setup ─────────────────────────────────────────────────────────────────
     env, mode_cfg, mode_label = build_env(cfg)
@@ -116,7 +115,13 @@ def _train_one(config_path: str, human: bool = False, resume: str | None = None)
 def _worker(args: tuple) -> None:
     """Multiprocessing entry point — unpacks args for _train_one."""
     config_path, human, resume = args
-    _train_one(config_path, human=human, resume=resume)
+    try:
+        _train_one(config_path, human=human, resume=resume)
+    except Exception as exc:
+        import traceback
+        tag = f"[{os.path.splitext(os.path.basename(config_path))[0]}]"
+        print(f"\n{tag} WORKER CRASHED:\n{traceback.format_exc()}", flush=True)
+        raise exc
 
 
 # ── Group resolution ─────────────────────────────────────────────────────────

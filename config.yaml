@@ -1,12 +1,12 @@
 environment:
   name: "CarRacing-v3"
   render_mode: "rgb_array"   # "human" to watch live
-  n_episodes: 3000
+  n_episodes: 5000
   log_interval: 10
   mode: "dqn"                # discrete | continuous | dqn
   lap_complete_percent: 0.95
   domain_randomize: false
-  checkpoint_interval: 500   # save a checkpoint every N episodes (0 = disabled)
+  checkpoint_interval: 250   # save a checkpoint every N episodes (0 = disabled)
 
 seed: 42
 
@@ -41,11 +41,11 @@ dqn:
     learning_rate: 0.0001
     discount_factor: 0.99
     epsilon: 1.0
-    exploration_decay: 0.9990
+    exploration_decay: 0.997  # reaches ~0.05 after ~1000 episodes
     final_epsilon: 0.05
-    batch_size: 32
-    replay_buffer_size: 15000
-    target_update_freq: 1000
+    batch_size: 64
+    replay_buffer_size: 50000
+    target_update_freq: 500
     train_start: 5000
 
 observation:

@@ -1,5 +1,6 @@
 import numpy as np
 import gymnasium as gym
+from collections import deque
 
 ACTION_SETS = {
     "standard": [
@@ -57,6 +58,69 @@ class DiscretizedEnv(gym.Wrapper):
         return self.env.step(self._actions[action])
 
 
+class CarRacingPreprocessor(gym.Wrapper):
+    """Preprocessing wrapper for DQN on CarRacing.
+
+    Applies in order:
+      1. Grayscale conversion  (96, 96, 3) -> (96, 96)
+      2. Crop bottom 12 rows   (96, 96)    -> (84, 96)   removes dashboard
+      3. Crop 6px each side     (84, 96)    -> (84, 84)   square frame
+      4. Frame stacking         (84, 84)    -> (84, 84, N) last N frames
+      5. Action repeat          repeat each action for K env steps
+
+    No external dependencies — pure numpy.
+
+    Output observation shape: (84, 84, frame_stack) dtype uint8
+    """
+
+    def __init__(self, env: gym.Env, frame_stack: int = 4,
+                 action_repeat: int = 4):
+        super().__init__(env)
+        self.frame_stack = frame_stack
+        self.action_repeat = action_repeat
+        self._frames: deque = deque(maxlen=frame_stack)
+        self.observation_space = gym.spaces.Box(
+            low=0, high=255,
+            shape=(84, 84, frame_stack),
+            dtype=np.uint8,
+        )
+
+    @staticmethod
+    def _process_frame(frame: np.ndarray) -> np.ndarray:
+        """RGB (96,96,3) -> grayscale, cropped (84,84) uint8."""
+        # Luminance-weighted grayscale
+        gray = (0.299 * frame[:, :, 0]
+                + 0.587 * frame[:, :, 1]
+                + 0.114 * frame[:, :, 2]).astype(np.uint8)
+        # Crop: remove 12-row dashboard at bottom, 6px from each side
+        return gray[:84, 6:90]
+
+    def _get_obs(self) -> np.ndarray:
+        """Stack buffered frames along the last axis -> (84, 84, N)."""
+        return np.stack(self._frames, axis=-1)
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        frame = self._process_frame(obs)
+        # Fill the buffer with copies of the first frame
+        for _ in range(self.frame_stack):
+            self._frames.append(frame)
+        return self._get_obs(), info
+
+    def step(self, action):
+        total_reward = 0.0
+        terminated = False
+        truncated = False
+        info = {}
+        for _ in range(self.action_repeat):
+            obs, reward, terminated, truncated, info = self.env.step(action)
+            total_reward += reward
+            if terminated or truncated:
+                break
+        self._frames.append(self._process_frame(obs))
+        return self._get_obs(), total_reward, terminated, truncated, info
+
+
 def build_env(cfg: dict):
     """Construct the gym environment and return (env, mode_cfg, label)."""
     mode     = cfg["environment"].get("mode", "discrete")
@@ -79,6 +143,13 @@ def build_env(cfg: dict):
         else:
             env   = raw_env
             label = "dqn (CNN) / discrete -> 5 actions"
+
+        # Apply DQN frame preprocessing (grayscale, crop, stack, repeat)
+        fstack  = mode_cfg.get("frame_stack", 4)
+        arepeat = mode_cfg.get("action_repeat", 4)
+        env = CarRacingPreprocessor(env, frame_stack=fstack,
+                                    action_repeat=arepeat)
+        label += f"  stack={fstack} repeat={arepeat}"
 
     elif mode == "continuous":
         mode_cfg = cfg["continuous"]

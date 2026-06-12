@@ -16,29 +16,43 @@ except ImportError:
 
 
 class CNN(nn.Module):
-    """
-    Convolutional Q-network.
-    Input:  (B, 3, 96, 96)
-    Output: (B, n_actions)
+    """Convolutional Q-network.
+
+    Automatically adapts to the input shape — works with both raw
+    RGB frames (3, 96, 96) and preprocessed stacked grayscale
+    frames (4, 84, 84).
+
+    Args:
+        n_actions:  Number of discrete actions.
+        n_channels: Number of input channels (e.g. 3 for RGB, 4 for frame-stack).
+        input_size: Spatial height/width of the (square) input frame.
     """
 
-    def __init__(self, n_actions: int):
+    def __init__(self, n_actions: int, n_channels: int = 3,
+                 input_size: int = 84):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=8, stride=4),
+        self.features = nn.Sequential(
+            nn.Conv2d(n_channels, 32, kernel_size=8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(64 * 8 * 8, 512),
+        )
+        # Compute the flattened feature size dynamically so the linear
+        # layer is correct for any (n_channels, input_size, input_size).
+        with torch.no_grad():
+            dummy = torch.zeros(1, n_channels, input_size, input_size)
+            flat_size = self.features(dummy).shape[1]
+        self.head = nn.Sequential(
+            nn.Linear(flat_size, 512),
             nn.ReLU(),
             nn.Linear(512, n_actions),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x / 255.0)
+        return self.head(self.features(x / 255.0))
 
 
 class ReplayBuffer:
@@ -102,9 +116,17 @@ class DQNAgent(Agent):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Auto-detect input shape from environment observation space.
+        # Supports both raw (96, 96, 3) and preprocessed (84, 84, 4).
+        obs_shape = env.observation_space.shape  # (H, W, C)
+        n_channels = obs_shape[-1]
+        input_size = obs_shape[0]
+
         n = env.action_space.n
-        self.online = CNN(n).to(self.device)
-        self.target = CNN(n).to(self.device)
+        self.online = CNN(n, n_channels=n_channels,
+                          input_size=input_size).to(self.device)
+        self.target = CNN(n, n_channels=n_channels,
+                          input_size=input_size).to(self.device)
         self.target.load_state_dict(self.online.state_dict())
         self.target.eval()
 
@@ -118,7 +140,7 @@ class DQNAgent(Agent):
     # ── Agent interface ───────────────────────────────────────────────────────
 
     def preprocess(self, raw_obs: np.ndarray, obs_cfg: dict) -> np.ndarray:
-        """DQN operates on raw pixel observations — no tabular preprocessing."""
+        """DQN uses whatever the env wrapper provides — no extra work here."""
         return raw_obs
 
     def train_step(self, obs: np.ndarray, action: int, reward: float,

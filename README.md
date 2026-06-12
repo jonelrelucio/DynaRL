@@ -22,8 +22,8 @@ pip install -r requirements.txt
 ## Training
 
 ```bash
-python car_racing.py                        # uses config.yaml
-python car_racing.py --config my_cfg.yaml   # custom config
+python train.py                        # uses config.yaml
+python train.py --config my_cfg.yaml   # custom config
 ```
 
 Training logs are written to `<save_path>_log.csv` and periodic checkpoints are saved every `checkpoint_interval` episodes (configurable in `config.yaml`).
@@ -31,7 +31,8 @@ Training logs are written to `<save_path>_log.csv` and periodic checkpoints are 
 ## Evaluation
 
 ```bash
-python evaluate.py   # renders 5 episodes using saved weights
+python evaluate.py                           # 5 episodes, rendered
+python evaluate.py --episodes 10 --no-render
 ```
 
 ## Configuration
@@ -69,8 +70,25 @@ dqn:
 ## Project Structure
 
 ```
-car_racing.py     — agents, environment wrappers, training loop
-evaluate.py       — load a checkpoint and render evaluation episodes
-config.yaml       — all hyperparameters and training settings
-requirements.txt  — pinned dependencies
+agents/
+├── base.py          Agent ABC + BaseAgent (shared tabular state)
+├── tabular.py       QLearning, DoubleQ, SARSA, ExpectedSARSA
+├── dqn.py           DQNAgent, CNN, ReplayBuffer
+└── __init__.py      AGENT_REGISTRY + make_agent factory
+
+envs/
+├── wrappers.py      DiscretizedEnv, ACTION_SETS, build_env
+└── __init__.py
+
+utils/
+├── preprocessing.py extract_features, preprocess, to_tuple
+├── logging.py       Logger ABC, CSVLogger, ConsoleLogger, CompositeLogger
+└── __init__.py
+
+trainer.py           Trainer class + run_episode
+train.py             Entry point (argparse → Trainer)
+evaluate.py          Load checkpoint and render evaluation episodes
+config.yaml          All hyperparameters and training settings
+requirements.txt     Pinned dependencies
 ```
+

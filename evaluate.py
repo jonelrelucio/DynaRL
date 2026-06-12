@@ -1,13 +1,27 @@
-import yaml
+"""Evaluate a trained agent.
+
+Usage::
+
+    python evaluate.py                           # 5 episodes, rendered
+    python evaluate.py --config my_cfg.yaml
+    python evaluate.py --episodes 10 --no-render
+"""
+
+import argparse
 import numpy as np
-from car_racing import build_env, make_agent, run_episode
+import yaml
+
+from agents import make_agent
+from envs import build_env
+from trainer import run_episode
 
 
-def evaluate(n_episodes: int = 5, render: bool = True):
-    with open("config.yaml", "r") as f:
+def evaluate(config: str = "config.yaml",
+             n_episodes: int = 5,
+             render: bool = True) -> None:
+    with open(config, "r") as f:
         cfg = yaml.safe_load(f)
 
-    # Force human rendering for watching the agent
     if render:
         cfg["environment"]["render_mode"] = "human"
 
@@ -15,20 +29,18 @@ def evaluate(n_episodes: int = 5, render: bool = True):
     agent = make_agent(mode_cfg, env)
     obs_cfg = cfg.get("observation", {})
 
-    # Load trained weights
     save_path = cfg.get("save_path")
     if not save_path:
         raise ValueError("No save_path set in config.yaml")
     agent.load(save_path)
 
-    # Disable exploration completely
+    # Disable exploration completely during evaluation
     agent.epsilon = 0.0
 
     print(f"Evaluating: {mode_label}")
     rewards = []
 
     for ep in range(n_episodes):
-        # training=False → no update(), no replay buffer writes
         reward = run_episode(env, agent, obs_cfg, training=False, seed=ep)
         rewards.append(reward)
         print(f"  Episode {ep+1}: reward = {reward:.2f}")
@@ -38,4 +50,9 @@ def evaluate(n_episodes: int = 5, render: bool = True):
 
 
 if __name__ == "__main__":
-    evaluate(n_episodes=5, render=True)
+    parser = argparse.ArgumentParser(description="Evaluate a trained CarRacing agent.")
+    parser.add_argument("--config",    default="config.yaml")
+    parser.add_argument("--episodes",  type=int, default=5)
+    parser.add_argument("--no-render", action="store_true")
+    args = parser.parse_args()
+    evaluate(config=args.config, n_episodes=args.episodes, render=not args.no_render)

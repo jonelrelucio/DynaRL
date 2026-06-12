@@ -163,6 +163,7 @@ class ReplayBuffer:
         return len(self.buf)
 
 
+
 # ─── Tabular base agent ───────────────────────────────────────────────────────
 
 class BaseAgent:
@@ -249,23 +250,41 @@ class DoubleQLearningAgent(BaseAgent):
         return int(np.argmax(combined))
 
     def update(self, obs, action, reward, next_obs, next_action=None, done=False):
+        # Zero out the next-state value at terminal transitions
+        discount = 0.0 if done else self.gamma
         if rnd.random() < 0.5:
             best = int(np.argmax(self.q[next_obs]))
-            td_err = reward + self.gamma * self.q2[next_obs][best] - self.q[obs][action]
+            td_err = reward + discount * self.q2[next_obs][best] - self.q[obs][action]
             self.q[obs][action] += self.lr * td_err
         else:
             best = int(np.argmax(self.q2[next_obs]))
-            td_err = reward + self.gamma * self.q[next_obs][best] - self.q2[obs][action]
+            td_err = reward + discount * self.q[next_obs][best] - self.q2[obs][action]
             self.q2[obs][action] += self.lr * td_err
         self.counts[obs][action] += 1
         self.td_errors.append(abs(td_err))
+
+    def save(self, path: str):
+        with open(path + ".pkl", "wb") as f:
+            pickle.dump({"q": dict(self.q), "q2": dict(self.q2)}, f)
+        print(f"[save] {path}.pkl")
+
+    def load(self, path: str):
+        pkl = path + ".pkl"
+        if os.path.exists(pkl):
+            with open(pkl, "rb") as f:
+                data = pickle.load(f)
+            self.q.update(data["q"])
+            self.q2.update(data.get("q2", {}))
+            print(f"[load] {pkl}")
 
 
 class SARSAAgent(BaseAgent):
     def update(self, obs, action, reward, next_obs, next_action=None, done=False):
         if next_action is None:
             next_action = self.get_action(next_obs)
-        td_err = reward + self.gamma * self.q[next_obs][next_action] - self.q[obs][action]
+        # At terminal transitions the next-state value must be zero
+        next_q = 0.0 if done else self.q[next_obs][next_action]
+        td_err = reward + self.gamma * next_q - self.q[obs][action]
         self.q[obs][action] += self.lr * td_err
         self.counts[obs][action] += 1
         self.td_errors.append(abs(td_err))
@@ -322,7 +341,8 @@ class DQNAgent:
         self.replay = ReplayBuffer(hp.get("replay_buffer_size", 50_000))
 
         self.steps = 0
-        self.td_errors = []
+        # Use bounded deques to avoid manual trimming
+        self.td_errors = deque(maxlen=10_000)
         self.episode_rewards = []
 
     def get_action(self, obs: np.ndarray) -> int:
@@ -361,6 +381,10 @@ class DQNAgent:
 
         if self.steps % self.target_update_freq == 0:
             self.target.load_state_dict(self.online.state_dict())
+
+        if self.steps % 1000 == 0:
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
 
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
@@ -434,9 +458,10 @@ def run_episode(env, agent, obs_cfg: dict, training: bool = True, seed: int | No
             if is_dqn:
                 agent.update(obs, action, reward, next_obs, done)
             elif is_sarsa:
-                action = agent.update(obs, action, reward, next_obs)
+                # Pass done so the terminal bootstrap is zeroed correctly
+                action = agent.update(obs, action, reward, next_obs, done=done)
             else:
-                agent.update(obs, action, reward, next_obs)
+                agent.update(obs, action, reward, next_obs, done=done)
 
         obs = next_obs
 
@@ -513,6 +538,8 @@ def main():
     for ep in range(n_episodes):
         reward = run_episode(env, agent, obs_cfg, training=True, seed=ep)
         agent.episode_rewards.append(reward)
+        if len(agent.episode_rewards) > 5_000:
+            del agent.episode_rewards[:2_500]
         agent.decay_epsilon()
 
         print(
